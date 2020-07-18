@@ -6,7 +6,7 @@ import (
 )
 
 // Always will perform a reflink operation and fail on error
-func Always(dst, src string) error {
+func Always(src, dst string) error {
 	s, err := os.Open(src)
 	if err != nil {
 		return err
@@ -18,13 +18,18 @@ func Always(dst, src string) error {
 		return err
 	}
 	defer d.Close()
+
+	// keep file mode if possible
+	if st, err := s.Stat(); err == nil {
+		d.Chmod(st.Mode())
+	}
 
 	return reflinkInternal(d, s)
 }
 
 // Auto will attempt to perform a reflink oepration and fallback to normal data
 // copy if reflink is not supported.
-func Auto(dst, src string) error {
+func Auto(src, dst string) error {
 	s, err := os.Open(src)
 	if err != nil {
 		return err
@@ -36,6 +41,11 @@ func Auto(dst, src string) error {
 		return err
 	}
 	defer d.Close()
+
+	// keep file mode if possible
+	if st, err := s.Stat(); err == nil {
+		d.Chmod(st.Mode())
+	}
 
 	err = reflinkInternal(d, s)
 	if err != nil {
