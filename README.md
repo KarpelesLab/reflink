@@ -31,7 +31,7 @@ Other OSes have similar features, to be implemented in the future.
 	err := reflink.Auto("source_img.png", "modified_img.png")
 ```
 
-`reflink.Always` will fail if reflink is not supported, while `reflink.Auto` will fallback to a regular file copy.
+`reflink.Always` will fail if reflink is not supported or didn't work for any reason, while `reflink.Auto` will fallback to a regular file copy.
 
 # Notes
 
