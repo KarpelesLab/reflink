@@ -7,6 +7,15 @@ import (
 	"syscall"
 )
 
+// FICLONE is a constant from the Linux kernel include linux/fs.h, not found
+// in the unix or syscall packages.
+//
+// https://github.com/torvalds/linux/blob/v5.2/include/uapi/linux/fs.h#L195
+// #define FICLONE              _IOW(0x94, 9, int)
+//
+// printf("%lx", FICLONE) → 0x40049409
+const FICLONE = 0x40049409
+
 // reflinkInternal performs the actual reflink action without worrying about fallback
 func reflinkInternal(d, s *os.File) error {
 	ss, err := s.SyscallConn()
