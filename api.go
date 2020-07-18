@@ -27,7 +27,7 @@ func Always(src, dst string) error {
 	return reflinkInternal(d, s)
 }
 
-// Auto will attempt to perform a reflink oepration and fallback to normal data
+// Auto will attempt to perform a reflink operation and fallback to normal data
 // copy if reflink is not supported.
 func Auto(src, dst string) error {
 	s, err := os.Open(src)
