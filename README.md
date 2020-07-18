@@ -1,3 +1,5 @@
+[![GoDoc](https://godoc.org/github.com/KarpelesLab/reflink?status.svg)](https://godoc.org/github.com/KarpelesLab/reflink)
+
 # reflink
 
 Perform reflink operation on compatible filesystems (btrfs or xfs).
