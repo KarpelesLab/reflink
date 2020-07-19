@@ -7,13 +7,17 @@ import (
 	"path/filepath"
 )
 
-// Always will perform a reflink operation and fail on error
+// Always will perform a reflink operation and fail on error.
+//
+// This is equivalent to command cp --reflink=always
 func Always(src, dst string) error {
 	return reflinkFile(src, dst, false)
 }
 
 // Auto will attempt to perform a reflink operation and fallback to normal data
 // copy if reflink is not supported.
+//
+// This is equivalent to cp --reflink=auto
 func Auto(src, dst string) error {
 	return reflinkFile(src, dst, true)
 }
