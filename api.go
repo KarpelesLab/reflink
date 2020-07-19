@@ -80,3 +80,9 @@ func FReflink(dst, src *os.File, fallback bool) error {
 	}
 	return err
 }
+
+func Partial(dst, src *os.File, dstOffset, srcOffset, n int64, fallback bool) error {
+	err := reflinkRangeInternal(dst, src, dstOffset, srcOffset, n)
+	// TODO fallback
+	return err
+}
