@@ -64,7 +64,7 @@ func reflinkFile(src, dst string, fallback bool) error {
 	return nil
 }
 
-// FReflink performs the reflink operation on the passed files, replacing
+// Reflink performs the reflink operation on the passed files, replacing
 // dst's contents with src. If fallback is true and reflink fails, io.Copy will
 // be used to copy the data.
 //
