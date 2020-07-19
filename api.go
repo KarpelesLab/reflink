@@ -81,8 +81,18 @@ func FReflink(dst, src *os.File, fallback bool) error {
 	return err
 }
 
+// Partial performs a range reflink operation on the passed files, replacing
+// part of dst's contents with data from src. If fallback is true and reflink
+// fails, io.CopyN will be used to copy the data.
+//
+// In case of fallback, seek position in src and dst will be affected.
 func Partial(dst, src *os.File, dstOffset, srcOffset, n int64, fallback bool) error {
 	err := reflinkRangeInternal(dst, src, dstOffset, srcOffset, n)
-	// TODO fallback
+	if (err != nil) && fallback {
+		// seek both src & dst
+		src.Seek(srcOffset, io.SeekStart)
+		dst.Seek(dstOffset, io.SeekStart)
+		_, err = io.CopyN(dst, src, n)
+	}
 	return err
 }
