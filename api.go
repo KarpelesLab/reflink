@@ -9,20 +9,20 @@ import (
 
 // Always will perform a reflink operation and fail on error
 func Always(src, dst string) error {
-	return Reflink(src, dst, false)
+	return reflinkFile(src, dst, false)
 }
 
 // Auto will attempt to perform a reflink operation and fallback to normal data
 // copy if reflink is not supported.
 func Auto(src, dst string) error {
-	return Reflink(src, dst, true)
+	return reflinkFile(src, dst, true)
 }
 
-// Reflink perform the reflink operation in order to copy src into dst using
+// reflinkFile perform the reflink operation in order to copy src into dst using
 // the underlying filesystem's copy-on-write reflink system. If this fails (for
 // example the filesystem does not support reflink) and fallback is true, then
 // io.Copy will be used to copy the data.
-func Reflink(src, dst string, fallback bool) error {
+func reflinkFile(src, dst string, fallback bool) error {
 	s, err := os.Open(src)
 	if err != nil {
 		return err
@@ -69,7 +69,7 @@ func Reflink(src, dst string, fallback bool) error {
 // be used to copy the data.
 //
 // In case of fallback, seek position in src and dst will be affected.
-func FReflink(dst, src *os.File, fallback bool) error {
+func Reflink(dst, src *os.File, fallback bool) error {
 	err := reflinkInternal(dst, src)
 	if (err != nil) && fallback {
 		// seek both src & dst at beginning
