@@ -2,55 +2,81 @@ package reflink
 
 import (
 	"io"
+	"io/ioutil"
 	"os"
+	"path/filepath"
 )
 
 // Always will perform a reflink operation and fail on error
 func Always(src, dst string) error {
-	s, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer s.Close()
-
-	d, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer d.Close()
-
-	// keep file mode if possible
-	if st, err := s.Stat(); err == nil {
-		d.Chmod(st.Mode())
-	}
-
-	return reflinkInternal(d, s)
+	return Reflink(src, dst, false)
 }
 
 // Auto will attempt to perform a reflink operation and fallback to normal data
 // copy if reflink is not supported.
 func Auto(src, dst string) error {
+	return Reflink(src, dst, true)
+}
+
+// Reflink perform the reflink operation in order to copy src into dst using
+// the underlying filesystem's copy-on-write reflink system. If this fails (for
+// example the filesystem does not support reflink) and fallback is true, then
+// io.Copy will be used to copy the data.
+func Reflink(src, dst string, fallback bool) error {
 	s, err := os.Open(src)
 	if err != nil {
 		return err
 	}
 	defer s.Close()
 
-	d, err := os.Create(dst)
+	// generate temporary file for output
+	tmp, err := ioutil.TempFile(filepath.Dir(dst), "")
 	if err != nil {
 		return err
 	}
-	defer d.Close()
 
-	// keep file mode if possible
-	if st, err := s.Stat(); err == nil {
-		d.Chmod(st.Mode())
+	// copy to temp file
+	err = reflinkInternal(tmp, s)
+	if (err != nil) && fallback {
+		_, err = io.Copy(tmp, s)
 	}
+	tmp.Close() // we're not writing to this anymore
 
-	err = reflinkInternal(d, s)
+	// if an error happened, remove temp file and signal error
 	if err != nil {
-		_, err = io.Copy(d, s)
+		os.Remove(tmp.Name())
+		return err
 	}
 
+	// keep src file mode if possible
+	if st, err := s.Stat(); err == nil {
+		tmp.Chmod(st.Mode())
+	}
+
+	// replace dst file
+	err = os.Rename(tmp.Name(), dst)
+	if err != nil {
+		// failed to rename (dst is not writable?)
+		os.Remove(tmp.Name())
+		return err
+	}
+
+	return nil
+}
+
+// FReflink performs the reflink operation on the passed files, replacing
+// dst's contents with src. If fallback is true and reflink fails, io.Copy will
+// be used to copy the data.
+//
+// In case of fallback, seek position in src and dst will be affected.
+func FReflink(dst, src *os.File, fallback bool) error {
+	err := reflinkInternal(dst, src)
+	if (err != nil) && fallback {
+		// seek both src & dst at beginning
+		src.Seek(0, io.SeekStart)
+		dst.Seek(0, io.SeekStart)
+		dst.Truncate(0) // assuming any error in trucate will result in copy error
+		_, err = io.Copy(dst, src)
+	}
 	return err
 }
