@@ -1,14 +1,16 @@
 #!/bin/make
-GOPATH:=$(shell go env GOPATH)
+GOROOT:=$(shell PATH="/pkg/main/dev-lang.go/bin:$$PATH" go env GOROOT)
+GO=$(GOROOT)/bin/go
+GOPATH:=$(shell $(GO) env GOPATH)
 
 .PHONY: test deps
 
 all:
 	$(GOPATH)/bin/goimports -w -l .
-	go build -v
+	$(GO) build -v ./...
 
 deps:
-	go get -v -t .
+	$(GO) get -v -t ./...
 
 test:
-	go test -v
+	$(GO) test -v ./... -test.count 1
