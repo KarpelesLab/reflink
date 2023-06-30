@@ -1,6 +1,7 @@
 package reflink
 
 import (
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -71,16 +72,18 @@ func reflinkFile(src, dst string, fallback bool) error {
 // Reflink performs the reflink operation on the passed files, replacing
 // dst's contents with src. If fallback is true and reflink fails, io.Copy will
 // be used to copy the data.
-//
-// In case of fallback, seek position in src and dst will be affected.
 func Reflink(dst, src *os.File, fallback bool) error {
 	err := reflinkInternal(dst, src)
 	if (err != nil) && fallback {
-		// seek both src & dst at beginning
-		src.Seek(0, io.SeekStart)
-		dst.Seek(0, io.SeekStart)
+		st, err := src.Stat()
+		if err != nil {
+			// couldn't stat source, this can't be helped
+			return fmt.Errorf("failed to stat source: %w", err)
+		}
+		reader := io.NewSectionReader(src, 0, st.Size())
+		writer := &sectionWriter{w: dst}
 		dst.Truncate(0) // assuming any error in trucate will result in copy error
-		_, err = io.Copy(dst, src)
+		_, err = io.Copy(writer, reader)
 	}
 	return err
 }
@@ -88,15 +91,13 @@ func Reflink(dst, src *os.File, fallback bool) error {
 // Partial performs a range reflink operation on the passed files, replacing
 // part of dst's contents with data from src. If fallback is true and reflink
 // fails, io.CopyN will be used to copy the data.
-//
-// In case of fallback, seek position in src and dst will be affected.
 func Partial(dst, src *os.File, dstOffset, srcOffset, n int64, fallback bool) error {
 	err := reflinkRangeInternal(dst, src, dstOffset, srcOffset, n)
 	if (err != nil) && fallback {
 		// seek both src & dst
-		src.Seek(srcOffset, io.SeekStart)
-		dst.Seek(dstOffset, io.SeekStart)
-		_, err = io.CopyN(dst, src, n)
+		reader := io.NewSectionReader(src, srcOffset, n)
+		writer := &sectionWriter{w: dst, base: dstOffset}
+		_, err = io.CopyN(writer, reader, n)
 	}
 	return err
 }
