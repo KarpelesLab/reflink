@@ -43,6 +43,7 @@ func reflinkFile(src, dst string, fallback bool) error {
 	// copy to temp file
 	err = reflinkInternal(tmp, s)
 	if (err != nil) && fallback {
+		// reflink failed but fallback enabled, perform a normal copy instead
 		_, err = io.Copy(tmp, s)
 	}
 	tmp.Close() // we're not writing to this anymore
