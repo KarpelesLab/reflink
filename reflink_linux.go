@@ -4,30 +4,9 @@ package reflink
 
 import (
 	"os"
-	"syscall"
-	"unsafe"
-)
 
-// FICLONE is a constant from the Linux kernel include linux/fs.h, not found
-// in the unix or syscall packages.
-//
-// https://github.com/torvalds/linux/blob/v5.2/include/uapi/linux/fs.h#L195
-// #define FICLONE              _IOW(0x94, 9, int)
-// #define FICLONERANGE	_IOW(0x94, 13, struct file_clone_range)
-// #define FIDEDUPERANGE	_IOWR(0x94, 54, struct file_dedupe_range)
-const (
-	FICLONE       = 0x40049409
-	FICLONERANGE  = 0x4020940d
-	FIDEDUPERANGE = 0x40209436
+	"golang.org/x/sys/unix"
 )
-
-// https://github.com/torvalds/linux/blob/v5.2/include/uapi/linux/fs.h#L51
-type fsFileCloneRange struct {
-	srcFd      int64
-	srcOffset  uint64
-	srcLength  uint64
-	destOffset uint64
-}
 
 // reflinkInternal performs the actual reflink action without worrying about fallback
 func reflinkInternal(d, s *os.File) error {
@@ -45,10 +24,7 @@ func reflinkInternal(d, s *os.File) error {
 	err = sd.Control(func(dfd uintptr) {
 		err2 = ss.Control(func(sfd uintptr) {
 			// int ioctl(int dest_fd, FICLONE, int src_fd);
-			_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, dfd, FICLONE, sfd)
-			if errno != 0 {
-				err3 = errno
-			}
+			err3 = unix.IoctlFileClone(int(dfd), int(sfd))
 		})
 	})
 
@@ -79,18 +55,15 @@ func reflinkRangeInternal(dst, src *os.File, dstOffset, srcOffset, n int64) erro
 
 	err = sd.Control(func(dfd uintptr) {
 		err2 = ss.Control(func(sfd uintptr) {
-			req := &fsFileCloneRange{
-				srcFd:      int64(sfd),
-				srcOffset:  uint64(srcOffset),
-				srcLength:  uint64(n),
-				destOffset: uint64(dstOffset),
+			req := &unix.FileCloneRange{
+				Src_fd:      int64(sfd),
+				Src_offset:  uint64(srcOffset),
+				Src_length:  uint64(n),
+				Dest_offset: uint64(dstOffset),
 			}
 
 			// int ioctl(int dest_fd, FICLONE, int src_fd);
-			_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, dfd, FICLONERANGE, uintptr(unsafe.Pointer(&req)))
-			if errno != 0 {
-				err3 = errno
-			}
+			err3 = unix.IoctlFileCloneRange(int(dfd), req)
 		})
 	})
 

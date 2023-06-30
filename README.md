@@ -23,6 +23,10 @@ A machine needs to have a compatible OS and filesystem to perform reflinks. Know
 
 Other OSes have similar features, to be implemented in the future.
 
+* Windows has `DUPLICATE_EXTENTS_TO_FILE`
+* Solaris has `reflink`
+* MacOS has `clonefile`
+
 ## Usage
 
 ```golang
