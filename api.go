@@ -27,7 +27,8 @@ func Auto(src, dst string) error {
 // reflinkFile perform the reflink operation in order to copy src into dst using
 // the underlying filesystem's copy-on-write reflink system. If this fails (for
 // example the filesystem does not support reflink) and fallback is true, then
-// io.Copy will be used to copy the data.
+// copy_file_range will be used, and if that fails too io.Copy will be used to
+// copy the data.
 func reflinkFile(src, dst string, fallback bool) error {
 	s, err := os.Open(src)
 	if err != nil {
@@ -83,35 +84,35 @@ func reflinkFile(src, dst string, fallback bool) error {
 }
 
 // Reflink performs the reflink operation on the passed files, replacing
-// dst's contents with src. If fallback is true and reflink fails, io.Copy will
+// dst's contents with src. If fallback is true and reflink fails,
+// copy_file_range will be used first, and if that fails too io.Copy will
 // be used to copy the data.
 func Reflink(dst, src *os.File, fallback bool) error {
 	err := reflinkInternal(dst, src)
 	if (err != nil) && fallback {
+		// reflink failed, but we can fallback, but first we need to know the file's size
 		var st fs.FileInfo
 		st, err = src.Stat()
-		if err == nil {
-			_, err = copyFileRange(dst, src, 0, 0, st.Size())
-		}
-	}
-
-	if (err != nil) && fallback {
-		st, err := src.Stat()
 		if err != nil {
 			// couldn't stat source, this can't be helped
 			return fmt.Errorf("failed to stat source: %w", err)
 		}
-		reader := io.NewSectionReader(src, 0, st.Size())
-		writer := &sectionWriter{w: dst}
-		dst.Truncate(0) // assuming any error in trucate will result in copy error
-		_, err = io.Copy(writer, reader)
+		_, err = copyFileRange(dst, src, 0, 0, st.Size())
+		if err != nil {
+			// copyFileRange failed too, switch to simple io copy
+			reader := io.NewSectionReader(src, 0, st.Size())
+			writer := &sectionWriter{w: dst}
+			dst.Truncate(0) // assuming any error in trucate will result in copy error
+			_, err = io.Copy(writer, reader)
+		}
 	}
 	return err
 }
 
 // Partial performs a range reflink operation on the passed files, replacing
 // part of dst's contents with data from src. If fallback is true and reflink
-// fails, io.CopyN will be used to copy the data.
+// fails, copy_file_range will be used first, and if that fails too io.CopyN
+// will be used to copy the data.
 func Partial(dst, src *os.File, dstOffset, srcOffset, n int64, fallback bool) error {
 	err := reflinkRangeInternal(dst, src, dstOffset, srcOffset, n)
 	if (err != nil) && fallback {
