@@ -26,11 +26,11 @@ Other OSes have similar features, to be implemented in the future.
 ## Usage
 
 ```golang
-	err := reflink.Always("original_file.bin", "snapshot-001.bin")
+err := reflink.Always("original_file.bin", "snapshot-001.bin")
 
-	// or
+// or
 
-	err := reflink.Auto("source_img.png", "modified_img.png")
+err := reflink.Auto("source_img.png", "modified_img.png")
 ```
 
 `reflink.Always` will fail if reflink is not supported or didn't work for any reason, while `reflink.Auto` will fallback to a regular file copy.
