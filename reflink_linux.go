@@ -3,6 +3,7 @@
 package reflink
 
 import (
+	"errors"
 	"os"
 
 	"golang.org/x/sys/unix"
@@ -35,6 +36,10 @@ func reflinkInternal(d, s *os.File) error {
 	if err2 != nil {
 		// ss.Control failed
 		return err2
+	}
+
+	if err3 != nil && errors.Is(err3, unix.ENOTSUP) {
+		return ErrReflinkFailed
 	}
 
 	// err3 is ioctl() response
@@ -74,6 +79,9 @@ func reflinkRangeInternal(dst, src *os.File, dstOffset, srcOffset, n int64) erro
 	if err2 != nil {
 		// ss.Control failed
 		return err2
+	}
+	if err3 != nil && errors.Is(err3, unix.ENOTSUP) {
+		return ErrReflinkFailed
 	}
 
 	// err3 is ioctl() response
