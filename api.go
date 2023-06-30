@@ -3,6 +3,7 @@ package reflink
 import (
 	"fmt"
 	"io"
+	"io/fs"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -42,6 +43,17 @@ func reflinkFile(src, dst string, fallback bool) error {
 
 	// copy to temp file
 	err = reflinkInternal(tmp, s)
+
+	// if reflink failed but we allow fallback, first attempt using copyFileRange (will actually clone bytes on some filesystems)
+	if (err != nil) && fallback {
+		var st fs.FileInfo
+		st, err = s.Stat()
+		if err == nil {
+			_, err = copyFileRange(tmp, s, 0, 0, st.Size())
+		}
+	}
+
+	// if everything failed and we fallback, attempt io.Copy
 	if (err != nil) && fallback {
 		// reflink failed but fallback enabled, perform a normal copy instead
 		_, err = io.Copy(tmp, s)
@@ -76,6 +88,14 @@ func reflinkFile(src, dst string, fallback bool) error {
 func Reflink(dst, src *os.File, fallback bool) error {
 	err := reflinkInternal(dst, src)
 	if (err != nil) && fallback {
+		var st fs.FileInfo
+		st, err = src.Stat()
+		if err == nil {
+			_, err = copyFileRange(dst, src, 0, 0, st.Size())
+		}
+	}
+
+	if (err != nil) && fallback {
 		st, err := src.Stat()
 		if err != nil {
 			// couldn't stat source, this can't be helped
@@ -94,6 +114,10 @@ func Reflink(dst, src *os.File, fallback bool) error {
 // fails, io.CopyN will be used to copy the data.
 func Partial(dst, src *os.File, dstOffset, srcOffset, n int64, fallback bool) error {
 	err := reflinkRangeInternal(dst, src, dstOffset, srcOffset, n)
+	if (err != nil) && fallback {
+		_, err = copyFileRange(dst, src, dstOffset, srcOffset, n)
+	}
+
 	if (err != nil) && fallback {
 		// seek both src & dst
 		reader := io.NewSectionReader(src, srcOffset, n)

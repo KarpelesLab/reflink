@@ -79,3 +79,37 @@ func reflinkRangeInternal(dst, src *os.File, dstOffset, srcOffset, n int64) erro
 	// err3 is ioctl() response
 	return err3
 }
+
+func copyFileRange(dst, src *os.File, dstOffset, srcOffset, n int64) (int64, error) {
+	ss, err := src.SyscallConn()
+	if err != nil {
+		return 0, err
+	}
+	sd, err := dst.SyscallConn()
+	if err != nil {
+		return 0, err
+	}
+
+	var resN int
+	var err2, err3 error
+
+	err = sd.Control(func(dfd uintptr) {
+		err2 = ss.Control(func(sfd uintptr) {
+			// call syscall
+			resN, err3 = unix.CopyFileRange(int(sfd), &srcOffset, int(dfd), &dstOffset, int(n), 0)
+		})
+	})
+
+	if err != nil {
+		// sd.Control failed
+		return int64(resN), err
+	}
+	if err2 != nil {
+		// ss.Control failed
+		return int64(resN), err2
+	}
+
+	// err3 is ioctl() response
+	return int64(resN), err3
+
+}
