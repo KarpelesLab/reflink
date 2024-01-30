@@ -13,5 +13,5 @@ func reflinkRangeInternal(dst, src *os.File, dstOffset, srcOffset, n int64) erro
 }
 
 func copyFileRange(dst, src *os.File, dstOffset, srcOffset, n int64) (int64, error) {
-	return ErrReflinkUnsupported
+	return 0, ErrReflinkUnsupported
 }
