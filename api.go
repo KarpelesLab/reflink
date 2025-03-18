@@ -9,26 +9,44 @@ import (
 	"path/filepath"
 )
 
-// Always will perform a reflink operation and fail on error.
+// Always will perform a reflink operation and fail on error if reflink is not supported.
+// It creates a copy of the source file at the destination using the filesystem's
+// copy-on-write mechanism, which is extremely fast and space-efficient.
 //
-// This is equivalent to command cp --reflink=always
+// This is equivalent to command `cp --reflink=always` on Linux systems.
+// Both files must be on the same filesystem that supports reflinks (btrfs, xfs).
+//
+// Returns ErrReflinkUnsupported if the OS doesn't support reflinks,
+// or ErrReflinkFailed if the specific filesystem doesn't support reflinks.
 func Always(src, dst string) error {
 	return reflinkFile(src, dst, false)
 }
 
 // Auto will attempt to perform a reflink operation and fallback to normal data
-// copy if reflink is not supported.
+// copy if reflink is not supported. This is the safer option for general use.
 //
-// This is equivalent to cp --reflink=auto
+// The fallback mechanism follows this priority:
+// 1. Try reflink (FICLONE ioctl)
+// 2. Try copy_file_range syscall (more efficient than userspace copy)
+// 3. Fallback to regular io.Copy
+//
+// This is equivalent to `cp --reflink=auto` on Linux systems.
 func Auto(src, dst string) error {
 	return reflinkFile(src, dst, true)
 }
 
-// reflinkFile perform the reflink operation in order to copy src into dst using
-// the underlying filesystem's copy-on-write reflink system. If this fails (for
-// example the filesystem does not support reflink) and fallback is true, then
-// copy_file_range will be used, and if that fails too io.Copy will be used to
-// copy the data.
+// reflinkFile performs the reflink operation to copy src into dst using
+// the underlying filesystem's copy-on-write reflink system. 
+//
+// The function creates a temporary file in the same directory as dst, performs the 
+// copy operation to this temporary file, and then renames it to dst. This ensures 
+// atomic replacement of the destination file.
+//
+// If reflink fails (for example, if the filesystem does not support reflinks) and 
+// fallback is true, then copy_file_range will be used. If copy_file_range also fails, 
+// io.Copy will be used as a final fallback to copy the data.
+//
+// The function preserves the file mode of the source file when possible.
 func reflinkFile(src, dst string, fallback bool) error {
 	s, err := os.Open(src)
 	if err != nil {
@@ -84,9 +102,16 @@ func reflinkFile(src, dst string, fallback bool) error {
 }
 
 // Reflink performs the reflink operation on the passed files, replacing
-// dst's contents with src. If fallback is true and reflink fails,
-// copy_file_range will be used first, and if that fails too io.Copy will
-// be used to copy the data.
+// dst's contents with src. This function works with already-open file handles.
+//
+// If fallback is true and reflink fails (on unsupported filesystems),
+// copy_file_range will be tried first, and if that fails too, io.Copy will
+// be used to copy the data. When using io.Copy, the destination file will
+// be truncated first.
+//
+// Note: Unlike Always() and Auto(), this function requires you to open and
+// close the file handles yourself, which gives more control but requires more
+// careful handling.
 func Reflink(dst, src *os.File, fallback bool) error {
 	err := reflinkInternal(dst, src)
 	if (err != nil) && fallback {
@@ -110,9 +135,22 @@ func Reflink(dst, src *os.File, fallback bool) error {
 }
 
 // Partial performs a range reflink operation on the passed files, replacing
-// part of dst's contents with data from src. If fallback is true and reflink
-// fails, copy_file_range will be used first, and if that fails too io.CopyN
-// will be used to copy the data.
+// part of dst's contents with data from src. This allows for more fine-grained
+// control over which parts of the file are copied.
+//
+// Parameters:
+//   - dst: Destination file handle
+//   - src: Source file handle
+//   - dstOffset: Offset in the destination file where data should be written
+//   - srcOffset: Offset in the source file where data should be read from
+//   - n: Number of bytes to copy
+//   - fallback: Whether to fall back to regular copy methods if reflink fails
+//
+// If fallback is true and reflink fails, copy_file_range will be tried first,
+// and if that fails too, io.CopyN with appropriate readers/writers will be used.
+//
+// This function is useful for selectively copying parts of large files without
+// having to read and write the entire file contents.
 func Partial(dst, src *os.File, dstOffset, srcOffset, n int64, fallback bool) error {
 	err := reflinkRangeInternal(dst, src, dstOffset, srcOffset, n)
 	if (err != nil) && fallback {

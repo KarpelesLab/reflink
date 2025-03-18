@@ -9,7 +9,12 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// reflinkInternal performs the actual reflink action without worrying about fallback
+// reflinkInternal performs the actual reflink action using the FICLONE ioctl
+// without handling any fallback mechanism. On Linux, this uses the FICLONE ioctl
+// which efficiently creates a copy-on-write clone of the entire source file.
+//
+// This operation requires both files to be on the same filesystem that supports
+// reflinks (like btrfs or xfs with reflink=1 mount option).
 func reflinkInternal(d, s *os.File) error {
 	ss, err := s.SyscallConn()
 	if err != nil {
@@ -46,6 +51,9 @@ func reflinkInternal(d, s *os.File) error {
 	return err3
 }
 
+// reflinkRangeInternal performs a partial reflink operation using the FICLONERANGE ioctl,
+// which allows cloning a specific range of the source file to the destination file.
+// This is more efficient than copying the data when supported by the filesystem.
 func reflinkRangeInternal(dst, src *os.File, dstOffset, srcOffset, n int64) error {
 	ss, err := src.SyscallConn()
 	if err != nil {
@@ -88,6 +96,11 @@ func reflinkRangeInternal(dst, src *os.File, dstOffset, srcOffset, n int64) erro
 	return err3
 }
 
+// copyFileRange uses the copy_file_range Linux syscall to efficiently copy data between files
+// without involving userspace buffers. While not as efficient as reflink, it's still more
+// efficient than regular userspace copying with io.Copy when available.
+//
+// This function returns the number of bytes copied and any error that occurred.
 func copyFileRange(dst, src *os.File, dstOffset, srcOffset, n int64) (int64, error) {
 	ss, err := src.SyscallConn()
 	if err != nil {
